@@ -1,0 +1,52 @@
+import os
+import json
+import requests
+from typing import Dict, Any
+
+PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
+
+def load_system_prompt(version: str = None) -> str:
+    if version is None:
+        version_file = os.path.join(PROMPTS_DIR, "version.txt")
+        if os.path.exists(version_file):
+            with open(version_file, "r") as f:
+                version = f.read().strip()
+        else:
+            version = "v3"
+    prompt_file = os.path.join(PROMPTS_DIR, f"system_prompt_{version}.txt")
+    if not os.path.exists(prompt_file):
+        raise FileNotFoundError(f"Prompt file not found: {prompt_file}")
+    with open(prompt_file, "r") as f:
+        return f.read()
+
+class LLMParser:
+    def __init__(self, api_key: str = None, model: str = None, endpoint: str = None, prompt_version: str = None):
+        self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
+        self.model = model or os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+        self.endpoint = endpoint or os.getenv("DEEPSEEK_ENDPOINT", "https://api.deepseek.com/v1/chat/completions")
+        self.system_prompt = load_system_prompt(prompt_version or os.getenv("PROMPT_VERSION"))
+
+    def parse(self, raw_text: str) -> Dict[str, Any]:
+        user_prompt = f"Document content:\n{raw_text}\n\nExtract the submission data."
+
+        try:
+            response = requests.post(
+                self.endpoint,
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                json={
+                    "model": self.model,
+                    "messages": [
+                        {"role": "system", "content": self.system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    "temperature": 0.0,
+                    "response_format": {"type": "json_object"}
+                },
+                timeout=30
+            )
+            response.raise_for_status()
+            result = response.json()
+            extracted = json.loads(result["choices"][0]["message"]["content"])
+            return extracted
+        except Exception as e:
+            raise RuntimeError(f"DeepSeek extraction failed: {e}")
