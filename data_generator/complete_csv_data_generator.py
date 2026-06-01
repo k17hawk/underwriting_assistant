@@ -428,66 +428,67 @@ def generate_historical_decisions(submissions_df, locations_df, claim_metrics_df
     return pd.DataFrame(decisions)
 
 def main():
+    data_dir = '/home/lang-chain/Documents/underwriting_assistant/raw_data'
     print("1. Generating brokers...")
     brokers_df = generate_brokers(100)
-    brokers_df.to_csv("brokers.csv", index=False)
+    brokers_df.to_csv(f"{data_dir}/brokers.csv", index=False)
     
     print("2. Generating submissions...")
     broker_ids = brokers_df["broker_id"].tolist()
     submissions_df = generate_submissions(broker_ids, 200)
-    submissions_df.to_csv("submissions.csv", index=False)
+    submissions_df.to_csv(f"{data_dir}/submissions.csv", index=False)
     
     print("3. Generating locations...")
     locations_df = generate_locations(submissions_df)
-    locations_df.to_csv("locations.csv", index=False)
+    locations_df.to_csv(f"{data_dir}/locations.csv", index=False)
     
     print("4. Updating submission totals...")
     submissions_df = update_submission_totals(submissions_df, locations_df)
-    submissions_df.to_csv("submissions_updated.csv", index=False)
+    submissions_df.to_csv(f"{data_dir}/submissions_updated.csv", index=False)
     
     print("5. Generating location risk data...")
     location_risk_df = generate_location_risk_data(locations_df)
-    location_risk_df.to_csv("location_risk_data.csv", index=False)
+    location_risk_df.to_csv(f"{data_dir}/location_risk_data.csv", index=False)
     
     print("6. Generating protection features...")
     protection_df = generate_protection_features(locations_df)
-    protection_df.to_csv("protection_features.csv", index=False)
+    protection_df.to_csv(f"{data_dir}/protection_features.csv", index=False)
     
     print("7. Generating survey findings...")
     survey_df = generate_survey_findings(locations_df)
-    survey_df.to_csv("survey_findings.csv", index=False)
+    survey_df.to_csv(f"{data_dir}/survey_findings.csv", index=False)
     
     print("8. Generating claims...")
     claims_df = generate_claims(submissions_df, locations_df)
-    claims_df.to_csv("claims.csv", index=False)
+    claims_df.to_csv(f"{data_dir}/claims.csv", index=False)
     
     print("9. Computing claim metrics...")
     claim_metrics_df = compute_claim_metrics(claims_df, submissions_df)
-    claim_metrics_df.to_csv("claim_metrics.csv", index=False)
+    claim_metrics_df.to_csv(f"{data_dir}/claim_metrics.csv", index=False)
     
     print("10. Creating underwriting rules...")
     rules_df = create_underwriting_rules()
-    rules_df.to_csv("underwriting_rules.csv", index=False)
+    rules_df.to_csv(f"{data_dir}/underwriting_rules.csv", index=False)
     
     print("11. Generating referrals...")
     referrals_df = generate_referrals(submissions_df)
-    referrals_df.to_csv("referrals.csv", index=False)
+    referrals_df.to_csv(f"{data_dir}/referrals.csv", index=False)
     
     print("12. Generating requirements...")
     requirements_df = generate_requirements(submissions_df)
-    requirements_df.to_csv("requirements.csv", index=False)
+    requirements_df.to_csv(f"{data_dir}/requirements.csv", index=False)
     
     print("13. Generating policy conditions...")
     policy_conditions_df = generate_policy_conditions(submissions_df, locations_df, rules_df)
-    policy_conditions_df.to_csv("policy_conditions.csv", index=False)
+    policy_conditions_df.to_csv(f"{data_dir}/policy_conditions.csv", index=False)
     
     print("14. Generating quotes...")
     quotes_df = generate_quotes(submissions_df)
-    quotes_df.to_csv("quotes.csv", index=False)
+    quotes_df.to_csv(f"{data_dir}/quotes.csv", index=False)
     
     print("15. Generating historical decisions...")
     historical_df = generate_historical_decisions(submissions_df, locations_df, claim_metrics_df)
-    historical_df.to_csv("historical_decisions.csv", index=False)
+    historical_df.to_csv(f"{data_dir}/historical_decisions.csv", index=False)
     
     print("All tables generated successfully!")
 
