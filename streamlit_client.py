@@ -103,8 +103,6 @@ with tab2:
                 except Exception as e:
                     st.error(f"Retrieval failed: {e}")
 
-# ----------------------------------------------------------------------
-# Optional: Show available tools
 if st.sidebar.checkbox("Show available tools"):
     try:
         tools = run_async(session.list_tools())
