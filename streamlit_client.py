@@ -2,46 +2,27 @@ import asyncio
 import streamlit as st
 from mcp import ClientSession, StdioServerParameters
 
-# ----------------------------------------------------------------------
-# Helper to run async calls from Streamlit (which is sync)
 def run_async(coro):
     """Run an async coroutine and return result."""
     try:
         loop = asyncio.get_running_loop()
-        # If already in a running loop (e.g., Streamlit's own), create a new task
-        # but for simplicity we use asyncio.run() for top-level.
-        # Streamlit runs on its own event loop, so we need to ensure we use that.
-        # The simplest: use asyncio.run_coroutine_threadsafe with a new loop?
-        # Actually, Streamlit's asyncio support: we can use st.runtime.scriptrunner.add_async_task.
     except RuntimeError:
-        # No running loop – safe to use asyncio.run()
         return asyncio.run(coro)
-    # If we are inside a running loop (Streamlit's own), we need to manage.
-    # Workaround: use nest_asyncio or just create a new event loop in a thread.
-    # Simpler: use asyncio.new_event_loop + run_until_complete.
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     return loop.run_until_complete(coro)
 
-# ----------------------------------------------------------------------
-# Initialize the MCP client session (cached so we don't restart server every time)
 @st.cache_resource
 def get_mcp_session():
     """Start the MCP server subprocess and return a ClientSession."""
     server_params = StdioServerParameters(
         command="python",
-        args=["run_mcp.py"]   # relative to project root
+        args=["run_mcp.py"]
     )
-    # The context manager will start the server and connect
-    # We want to keep the session alive for the whole Streamlit app.
-    # We'll create it once and store in st.session_state.
     session = ClientSession(server_params)
-    # Initialize the connection (this is async)
     run_async(session.initialize())
     return session
 
-# ----------------------------------------------------------------------
-# Streamlit UI
 st.set_page_config(page_title="Underwriting Extractor Client", layout="wide")
 st.title("📄 Underwriting Submission Extractor (MCP Client)")
 
@@ -56,8 +37,6 @@ if "mcp_session" not in st.session_state:
 
 session = st.session_state.mcp_session
 
-# ------------------------------------------------------------
-# Tabs: Extract and Retrieve
 tab1, tab2 = st.tabs(["🔍 Extract New Submission", "📂 Retrieve Existing Artifact"])
 
 with tab1:
@@ -76,9 +55,7 @@ with tab1:
                     if correlation_id.strip():
                         args["correlation_id"] = correlation_id.strip()
                     result = run_async(session.call_tool("extract_submission", arguments=args))
-                    # result is a list of TextContent objects
                     response_text = result.content[0].text
-                    # Display JSON nicely
                     st.subheader("Extracted Artifact")
                     st.json(response_text)  # assumes JSON string
                 except Exception as e:
