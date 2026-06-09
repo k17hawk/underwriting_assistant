@@ -57,7 +57,6 @@ class ExtractorHandoff:
                 is_valid = True
             except Exception as e:
                 is_valid = False
-                # Store invalid artifact for debugging
                 self.artifact_store.store_artifact(correlation_id, extracted_dict, is_valid=False)
                 raise RuntimeError(f"Schema validation failed: {e}")
 
