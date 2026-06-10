@@ -59,14 +59,9 @@ class ExtractorHandoff:
                 is_valid = False
                 self.artifact_store.store_artifact(correlation_id, extracted_dict, is_valid=False)
                 raise RuntimeError(f"Schema validation failed: {e}")
-
-            # Store valid artifact in MongoDB
             self.artifact_store.store_artifact(correlation_id, artifact.model_dump(), is_valid=True)
-
-            # Send Kafka handoff message
             self.streamer.send(correlation_id, schema_version="v3")
 
-            # Mark idempotency
             self.idempotency.mark_completed(correlation_id)
 
             span.set_status(Status(StatusCode.OK))
