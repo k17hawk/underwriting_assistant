@@ -22,7 +22,7 @@ class KafkaHandoff:
     def send(self, artifact_id: str, schema_version: str = "v3"):
         message = {
             "artifact_id": artifact_id,
-            "timestamp_extracted": datetime.utcnow().isoformat(),
+            "timestamp_extracted": datetime.now().isoformat(),
             "schema_version": schema_version,
         }
         self.producer.produce(

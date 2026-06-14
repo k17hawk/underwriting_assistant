@@ -4,10 +4,10 @@ from typing import Union, Optional
 from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
 
-from .models import UnderwritingSubmission
-from .parser import LLMParser
-from .storage import MongoArtifactStore, MongoIdempotencyStore
-from .streamer import KafkaHandoff
+from src.underwriter_parser.models import UnderwritingSubmission
+from src.underwriter_parser.parser import LLMParser
+from src.underwriter_parser.storage import MongoArtifactStore, MongoIdempotencyStore
+from src.underwriter_parser.streamer import KafkaHandoff
 
 class ExtractorHandoff:
     def __init__(self, parser: LLMParser = None):
@@ -48,7 +48,7 @@ class ExtractorHandoff:
             # Build final artifact dict
             extracted_dict["correlation_id"] = correlation_id
             extracted_dict["schema_version"] = "v3"
-            extracted_dict["timestamp_extracted"] = datetime.utcnow()
+            extracted_dict["timestamp_extracted"] = datetime.now()
             extracted_dict["source_file_hash"] = file_hash
 
             # Validate with Pydantic
