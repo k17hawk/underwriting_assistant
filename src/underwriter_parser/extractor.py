@@ -40,18 +40,14 @@ class ExtractorHandoff:
             # Input validation
             if len(raw_data) > 10 * 1024 * 1024:
                 raise ValueError("File too large (>10MB)")
-
-            # Parse with DeepSeek
             raw_text = raw_data.decode("utf-8", errors="replace")
             extracted_dict = self.parser.parse(raw_text)
 
-            # Build final artifact dict
             extracted_dict["correlation_id"] = correlation_id
             extracted_dict["schema_version"] = "v3"
             extracted_dict["timestamp_extracted"] = datetime.now()
             extracted_dict["source_file_hash"] = file_hash
 
-            # Validate with Pydantic
             try:
                 artifact = UnderwritingSubmission(**extracted_dict)
                 is_valid = True

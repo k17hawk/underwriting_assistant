@@ -14,10 +14,7 @@ load_dotenv()
 extractor = ExtractorHandoff()
 artifact_store = MongoArtifactStore()
 
-# Create FastMCP server
 mcp = FastMCP("extractor-mcp-server")
-
-# Define input schemas as Pydantic models (optional but cleaner)
 class ExtractSubmissionInput(BaseModel):
     raw_text: str = Field(..., description="Plain text content of the submission document")
     correlation_id: str = Field(None, description="Optional unique ID for idempotency")
