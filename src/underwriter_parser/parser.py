@@ -3,7 +3,7 @@ import json
 import requests
 from typing import Dict, Any
 
-PROMPTS_DIR = "src/underwriter_parser/prompts"
+PROMPTS_DIR = "/src/underwriter_parser/prompts"
 
 def load_system_prompt(version: str = None) -> str:
     if version is None:
