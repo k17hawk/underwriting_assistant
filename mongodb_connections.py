@@ -1,8 +1,8 @@
-# mongodb_connection.py
+# mongodb_connections.py
 import os
 import certifi
 import pymongo
-from typing import Optional, Dict, Any
+from typing import Optional
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -28,22 +28,45 @@ class MongoDBConnection:
         if not mongo_uri:
             raise ValueError("MONGODB_URI environment variable is not set")
         
-        # Get certificate for TLS
-        ca = certifi.where()
-        
-        # Connect with TLS certificate
-        self._client = pymongo.MongoClient(
-            mongo_uri,
-            tlsCAFile=ca,
-            tls=True
-        )
-        
-        # Test connection
         try:
+            # Get certificate for TLS
+            ca = certifi.where()
+            
+            # Connect with TLS certificate - Option A: Using tlsCAFile
+            self._client = pymongo.MongoClient(
+                mongo_uri,
+                tlsCAFile=ca,
+                tls=True,
+                tlsAllowInvalidCertificates=True,  # ⚠️ For development only
+                serverSelectionTimeoutMS=30000,  # 30 seconds timeout
+                connectTimeoutMS=30000,
+                socketTimeoutMS=30000,
+            )
+            
+            # Test connection
             self._client.admin.command('ping')
-            print("MongoDB connection established successfully")
+            print("✅ MongoDB connection established successfully")
+            
         except Exception as e:
-            raise ConnectionError(f"Failed to connect to MongoDB: {e}")
+            # Try alternative connection method
+            try:
+                print("⚠️ First connection attempt failed, trying alternative...")
+                
+                # Option B: Without explicit tlsCAFile
+                self._client = pymongo.MongoClient(
+                    mongo_uri,
+                    tls=True,
+                    tlsAllowInvalidCertificates=True,
+                    serverSelectionTimeoutMS=30000,
+                    connectTimeoutMS=30000,
+                    socketTimeoutMS=30000,
+                )
+                
+                self._client.admin.command('ping')
+                print("✅ MongoDB connection established successfully (alternative)")
+                
+            except Exception as e2:
+                raise ConnectionError(f"Failed to connect to MongoDB: {e2}")
     
     @property
     def client(self) -> pymongo.MongoClient:
@@ -60,5 +83,5 @@ class MongoDBConnection:
         """Get collection instance."""
         return self.client[db_name][collection_name]
 
-# Singleton instance
+
 mongo_connection = MongoDBConnection()

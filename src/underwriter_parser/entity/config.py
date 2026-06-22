@@ -1,13 +1,13 @@
-# config.py
+
 import os
 import yaml
 from pathlib import Path
 from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
-
-# Load .env first
 load_dotenv()
+
+
 
 class StorageConfig(BaseModel):
     artifact_dir: str = "./artifacts"
@@ -74,6 +74,12 @@ class ConfigLoader:
             # Override with environment variables (from .env)
             raw_config = cls._merge_env_vars(raw_config)
             
+            # Ensure storage is set
+            if "storage" not in raw_config:
+                raw_config["storage"] = {}
+            if "artifact_dir" not in raw_config["storage"]:
+                raw_config["storage"]["artifact_dir"] = "./artifacts"
+            
             cls._config = AppConfig(**raw_config)
         
         return cls._config
@@ -117,5 +123,5 @@ class ConfigLoader:
         
         return config
 
-# Singleton instance
+
 config = ConfigLoader.load()

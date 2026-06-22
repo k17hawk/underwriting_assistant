@@ -2,44 +2,41 @@
 import os
 from datetime import datetime
 from typing import Optional, Dict, Any
-from pymongo import MongoClient, errors
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from underwriter_parser.entity import config
-
-
+from src.underwriter_parser.entity.config import config
 from mongodb_connections import mongo_connection
-
 class MongoDBSubmissionStore:
-    """MongoDB storage for submission records using certifi connection."""
-    
     def __init__(self):
-        # Use the singleton connection
         self.client = mongo_connection.client
-        self.database_name = config.mongodb.database  # "underwriting_assistant"
+        self.database_name = config.mongodb.database
         
-        # Get collections
         self.db = self.client[self.database_name]
-        self.submissions = self.db[config.mongodb.files_collection]  # "raw_files"
-        self.artifacts = self.db[config.mongodb.artifacts_collection]  # "artifacts"
-        self.idempotency = self.db[config.mongodb.idempotency_collection]  # "idempotency"
+        self.submissions = self.db[config.mongodb.files_collection]
+        self.artifacts = self.db[config.mongodb.artifacts_collection]
+        self.idempotency = self.db[config.mongodb.idempotency_collection]
         
-        # Create indexes
         self._create_indexes()
     
     def _create_indexes(self):
         """Create necessary indexes."""
+        # ✅ _id index is created automatically by MongoDB
+        # Only create indexes on other fields
+        
+        # Submissions collection indexes
         self.submissions.create_index("correlation_id", unique=True)
         self.submissions.create_index("status")
         self.submissions.create_index("created_at")
         
+        # Artifacts collection indexes
         self.artifacts.create_index("correlation_id", unique=True)
-        self.idempotency.create_index("_id", unique=True)
+        
+        # Idempotency collection - _id already has index, no need to create
     
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=10))
     def create_submission_record(self, correlation_id: str, file_path: str, 
                                 original_filename: str = None) -> Dict[str, Any]:
-        """Create initial submission record and insert into MongoDB."""
+        """Create initial submission record."""
         record = {
             "correlation_id": correlation_id,
             "status": "PARSING",
@@ -53,7 +50,6 @@ class MongoDBSubmissionStore:
             "updated_at": datetime.utcnow()
         }
         
-        # Insert into submissions collection (raw_files)
         result = self.submissions.insert_one(record)
         print(f"✅ Submission record inserted with ID: {result.inserted_id}")
         return record
