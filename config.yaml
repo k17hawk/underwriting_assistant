@@ -1,0 +1,31 @@
+# config.yaml
+app:
+  name: "underwriting-parser"
+  environment: "development"
+  
+storage:
+  artifact_dir: "./artifacts"
+  max_file_size_mb: 10
+  
+kafka:
+  bootstrap_servers: "localhost:9092" 
+  parser_input_topic: "parser-input"   
+  parser_output_topic: "parser-output"
+  handoff_topic: "underwriting-topic" 
+  
+deepseek:
+  model: "deepseek-chat"              
+  endpoint: "https://api.deepseek.com/v1/chat/completions"
+  timeout_seconds: 60
+  temperature: 0.0
+  
+mongodb:
+  database: "underwriting_assistant"  
+  artifacts_collection: "artifacts"   
+  idempotency_collection: "idempotency"
+  files_collection: "raw_files"       
+  
+parsing:
+  max_retries: 3
+  retry_backoff_seconds: 2
+  prompt_version: "v3"                
