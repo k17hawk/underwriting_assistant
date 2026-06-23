@@ -27,26 +27,34 @@ class LLMParser:
         self.system_prompt = load_system_prompt(prompt_version or os.getenv("PROMPT_VERSION"))
 
     def parse(self, raw_text: str) -> Dict[str, Any]:
-        user_prompt = f"Document content:\n{raw_text}\n\nExtract the submission data."
+        # ✅ Contains "json"
+        user_prompt = f"""Document content:
+        {raw_text}
+
+        Extract all submission data and return as a json object only. No markdown, no explanation."""
 
         try:
-            response = requests.post(
-                self.endpoint,
-                headers={"Authorization": f"Bearer {self.api_key}"},
-                json={
-                    "model": self.model,
-                    "messages": [
-                        {"role": "system", "content": self.system_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    "temperature": 0.0,
-                    "response_format": {"type": "json_object"}
-                },
-                timeout=30
-            )
-            response.raise_for_status()
-            result = response.json()
-            extracted = json.loads(result["choices"][0]["message"]["content"])
-            return extracted
+                response = requests.post(
+                    self.endpoint,
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": self.model,
+                        "messages": [
+                            {"role": "system", "content": self.system_prompt},
+                            {"role": "user", "content": user_prompt}
+                        ],
+                        "temperature": 0.0,
+                        "max_tokens": 8192,
+                        "response_format": {"type": "json_object"}
+                    },
+                    timeout=30
+                )
+                response.raise_for_status()
+                result = response.json()
+                content = result["choices"][0]["message"]["content"].strip()
+                return json.loads(content)
         except Exception as e:
             raise RuntimeError(f"DeepSeek extraction failed: {e}")

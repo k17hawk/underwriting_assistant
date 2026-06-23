@@ -6,6 +6,9 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 from src.underwriter_parser.entity.config import config
 from mongodb_connections import mongo_connection
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+import pymongo.errors
+from datetime import date 
 class MongoDBSubmissionStore:
     def __init__(self):
         self.client = mongo_connection.client
@@ -95,33 +98,162 @@ class MongoDBSubmissionStore:
         """Get submission record by correlation_id."""
         return self.submissions.find_one({"correlation_id": correlation_id})
     
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=10))
+
+    def store_deepseek_response(self, correlation_id: str, deepseek_response: dict, is_valid: bool = True):
+        try:
+            from datetime import date
+
+            def clean_and_convert(obj):
+                """Clean keys and convert date/datetime objects."""
+                if isinstance(obj, datetime):
+                    return obj.isoformat()
+                if isinstance(obj, date):
+                    return obj.isoformat()
+                if isinstance(obj, dict):
+                    return {
+                        k.replace('.', '_').replace('$', '_'): clean_and_convert(v)
+                        for k, v in obj.items()
+                    }
+                if isinstance(obj, list):
+                    return [clean_and_convert(item) for item in obj]
+                return obj
+
+            cleaned_response = clean_and_convert(deepseek_response)
+
+            doc = {
+                "correlation_id": correlation_id,
+                "deepseek_response": cleaned_response,
+                "valid": is_valid,
+                "stored_at": datetime.utcnow()
+            }
+
+            self.artifacts.update_one(
+                {"correlation_id": correlation_id},
+                {"$set": doc},
+                upsert=True
+            )
+            print(f"✅ Full DeepSeek response stored in MongoDB")
+
+        except Exception as e:
+            print(f"❌ Failed to store DeepSeek response: {e}")
+            try:
+                import json
+                doc = {
+                    "correlation_id": correlation_id,
+                    "deepseek_response_json": json.dumps(deepseek_response, default=str),
+                    "valid": is_valid,
+                    "stored_at": datetime.utcnow()
+                }
+                self.artifacts.update_one(
+                    {"correlation_id": correlation_id},
+                    {"$set": doc},
+                    upsert=True
+                )
+                print(f"✅ Full DeepSeek response stored as JSON string")
+            except Exception as e2:
+                print(f"❌ Fallback storage failed: {e2}")      
+    @retry(
+     stop=stop_after_attempt(3), 
+     wait=wait_exponential(multiplier=1, min=1, max=10),
+     retry=retry_if_exception_type((pymongo.errors.OperationFailure, pymongo.errors.ServerSelectionTimeoutError))
+   )
+   
     def store_artifact(self, correlation_id: str, artifact_dict: dict, is_valid: bool = True):
         """Store parsed artifact in artifacts collection."""
-        doc = {
-            "correlation_id": correlation_id,
-            "artifact": artifact_dict,
-            "valid": is_valid,
-            "schema_version": config.parsing.prompt_version,
-            "stored_at": datetime.utcnow()
-        }
-        
-        result = self.artifacts.update_one(
-            {"correlation_id": correlation_id},
-            {"$set": doc},
-            upsert=True
-        )
-        
-        if result.upserted_id:
-            print(f"✅ Artifact inserted with ID: {result.upserted_id}")
-        else:
-            print(f"✅ Artifact updated for correlation_id: {correlation_id}")
+        try:
+            # ✅ Clean the artifact dict to remove problematic field names
+            def clean_keys(obj):
+                """Replace dots and dollar signs in dictionary keys."""
+                if isinstance(obj, dict):
+                    new_dict = {}
+                    for key, value in obj.items():
+                        # Replace dots with underscores
+                        new_key = key.replace('.', '_').replace('$', '_')
+                        new_dict[new_key] = clean_keys(value)
+                    return new_dict
+                elif isinstance(obj, list):
+                    return [clean_keys(item) for item in obj]
+                else:
+                    return obj
+            
+            # Clean the artifact data
+            cleaned_artifact = clean_keys(artifact_dict)
+            
+            # Also convert any datetime objects to strings
+            def convert_datetime(obj):
+                
+                if isinstance(obj, datetime):
+                    return obj.isoformat()
+                if isinstance(obj, date): 
+                    return obj.isoformat()
+                if isinstance(obj, dict):
+                    return {k: convert_datetime(v) for k, v in obj.items()}
+                if isinstance(obj, list):
+                    return [convert_datetime(item) for item in obj]
+                return obj
+            
+            cleaned_artifact = convert_datetime(cleaned_artifact)
+            
+            doc = {
+                "correlation_id": correlation_id,
+                "artifact": cleaned_artifact,
+                "valid": is_valid,
+                "schema_version": config.parsing.prompt_version,
+                "stored_at": datetime.utcnow()
+            }
+            
+            # ✅ Use replace_one with upsert instead of update_one
+            result = self.artifacts.replace_one(
+                {"correlation_id": correlation_id},
+                doc,
+                upsert=True
+            )
+            
+            if result.upserted_id:
+                print(f"✅ Artifact inserted with ID: {result.upserted_id}")
+            else:
+                print(f"✅ Artifact updated for correlation_id: {correlation_id}")
+            
+            return result
+            
+        except Exception as e:
+            print(f"❌ Failed to store artifact: {e}")
+            # Try fallback: store as JSON string
+            try:
+                import json
+                artifact_json = json.dumps(artifact_dict, default=str)
+                
+                doc = {
+                    "correlation_id": correlation_id,
+                    "artifact_json": artifact_json,
+                    "valid": is_valid,
+                    "schema_version": config.parsing.prompt_version,
+                    "stored_at": datetime.utcnow()
+                }
+                
+                self.artifacts.replace_one(
+                    {"correlation_id": correlation_id},
+                    doc,
+                    upsert=True
+                )
+                print(f"✅ Artifact stored as JSON string fallback")
+            except Exception as e2:
+                print(f"❌ Fallback storage also failed: {e2}")
+                raise
     
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=10))
     def get_artifact(self, correlation_id: str) -> Optional[Dict[str, Any]]:
         """Get artifact by correlation_id from artifacts collection."""
         doc = self.artifacts.find_one({"correlation_id": correlation_id})
-        return doc.get("artifact") if doc else None
+        if doc:
+            # If stored as JSON string
+            if "artifact_data" in doc:
+                import json
+                return json.loads(doc["artifact_data"])
+            # If stored as dict
+            elif "artifact" in doc:
+                return doc["artifact"]
+        return None
     
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=10))
     def is_processed(self, correlation_id: str) -> bool:
