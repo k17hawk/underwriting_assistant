@@ -38,7 +38,8 @@ class MongoDBSubmissionStore:
     
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=10))
     def create_submission_record(self, correlation_id: str, file_path: str, 
-                                original_filename: str = None) -> Dict[str, Any]:
+                            original_filename: str = None,
+                            page_count: int = 0) -> Dict[str, Any]:
         """Create initial submission record."""
         record = {
             "correlation_id": correlation_id,
@@ -48,9 +49,10 @@ class MongoDBSubmissionStore:
             "error_message": None,
             "file_path": file_path,
             "original_filename": original_filename,
+            "page_count": page_count,
             "parsed_json_path": None,
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.now(),
+            "updated_at": datetime.now()
         }
         
         result = self.submissions.insert_one(record)

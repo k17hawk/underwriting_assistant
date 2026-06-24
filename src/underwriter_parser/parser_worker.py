@@ -1,10 +1,11 @@
+# parser_worker.py - COMPLETE UPDATED VERSION
 import os
 import json
 import time
 import signal
 import requests
 from pathlib import Path
-from typing import Optional, Dict, Any, Union
+from typing import Optional, Dict, Any, Union, Tuple
 from datetime import datetime
 from confluent_kafka import Consumer, Producer
 from opentelemetry import trace
@@ -99,7 +100,6 @@ class ParserWorker:
             return f"{date_str}-01-01"
         return date_str
 
-    # ---------- NEW HELPER ----------
     def _coerce_to_string(self, val: Any) -> Optional[str]:
         """
         Coerce any value to a plain string.
@@ -117,6 +117,48 @@ class ParserWorker:
             return "; ".join(str(i) for i in val)
         return str(val)
 
+    # ---------- FIX PAGE REFERENCES ----------
+    def fix_page_references(self, data: Dict[str, Any], page_texts: dict) -> Dict[str, Any]:
+        """Fix page references based on actual content location."""
+        if not page_texts:
+            return data
+        
+        max_page = len(page_texts)
+        if max_page == 0:
+            max_page = 1
+        
+        def fix_refs(obj):
+            if isinstance(obj, dict):
+                # Check if this is a field with page_ref
+                if 'page_ref' in obj and isinstance(obj['page_ref'], str):
+                    # Validate and fix page_ref
+                    try:
+                        if obj['page_ref'].startswith('p'):
+                            page_num = int(obj['page_ref'][1:])
+                            if page_num < 1 or page_num > max_page:
+                                obj['page_ref'] = f"p{min(max_page, max(1, page_num))}"
+                        else:
+                            # If it doesn't start with 'p', try to extract number
+                            import re
+                            match = re.search(r'(\d+)', obj['page_ref'])
+                            if match:
+                                page_num = int(match.group(1))
+                                obj['page_ref'] = f"p{min(max_page, max(1, page_num))}"
+                            else:
+                                obj['page_ref'] = "p1"
+                    except:
+                        obj['page_ref'] = "p1"
+                
+                # Recursively process all values
+                for key, value in obj.items():
+                    obj[key] = fix_refs(value)
+                return obj
+            elif isinstance(obj, list):
+                return [fix_refs(item) for item in obj]
+            else:
+                return obj
+        
+        return fix_refs(data)
 
     # ---------- AZURE-STYLE FLATTENING ----------
     def _flatten_azure_response(self, azure_json: Dict[str, Any]) -> Dict[str, Any]:
@@ -199,7 +241,6 @@ class ParserWorker:
             }
             terrorism = {k: v for k, v in terrorism.items() if v is not None}
 
-        # excess: try multiple field name variants
         excess_std = (
             self._parse_number(get_field(policy_section, "excess_each_loss"))
             or self._parse_number(get_field(policy_section, "excess_standard"))
@@ -536,7 +577,6 @@ class ParserWorker:
         flattened["coverage"] = coverage
 
         # ----- Locations -----
-        # DeepSeek uses "locations" directly OR "location_schedule" — try both
         raw_locations = data.get("location_schedule") or data.get("locations", [])
 
         locations = []
@@ -560,8 +600,7 @@ class ParserWorker:
                 or loc.get("contents_sum_insured")
                 or loc.get("contents_value")
             )
-            # Auto-generate location_id from index if DeepSeek omits it
-            fallback_id = str(idx + 1).zfill(3)  # "001", "002", "003"
+            fallback_id = str(idx + 1).zfill(3)
             loc_data = {
                 "location_id":      (
                     loc.get("loc")
@@ -661,16 +700,25 @@ class ParserWorker:
 
         return flattened
 
-    def call_deepseek(self, raw_text: str, correlation_id: str = None) -> Dict[str, Any]:
+    def call_deepseek(self, raw_text: str, page_texts: dict, correlation_id: str = None) -> Dict[str, Any]:
         system_prompt = self._load_system_prompt()
-        user_prompt = f"""Document content:
+        
+        # Create page-aware user prompt
+        user_prompt = f"""Document content with page numbers:
+
 {raw_text}
+
+IMPORTANT: For each field you extract, you MUST include the page number where you found the information.
+Use the format "p<page_number>" (e.g., "p1", "p2", "p3") in the page_ref field.
+The document has {len(page_texts)} pages.
 
 Extract all submission data from the document above.
 Return your response as a json object only. No markdown, no explanation, just json."""
 
         if correlation_id:
             print(f"🤖 Calling DeepSeek API for: {correlation_id}")
+            print(f"📄 Document has {len(page_texts)} pages")
+        
         try:
             response = requests.post(
                 self.deepseek_config.endpoint,
@@ -732,28 +780,42 @@ Return your response as a json object only. No markdown, no explanation, just js
         else:
             return """You are an expert insurance underwriting assistant..."""
 
-    def extract_text_from_pdf(self, pdf_path: Path) -> str:
+    def extract_text_from_pdf(self, pdf_path: Path) -> Tuple[str, dict]:
+        """
+        Extract text from PDF with page numbers.
+        Returns: (combined_text, page_mapping)
+        page_mapping: {page_num: text_content}
+        """
         doc = fitz.open(pdf_path)
-        text = ""
-        for page in doc:
-            text += page.get_text()
+        page_texts = {}
+        combined_text = ""
+        
+        for page_num, page in enumerate(doc, start=1):
+            text = page.get_text()
+            page_texts[page_num] = text
+            combined_text += f"\n\n--- Page {page_num} ---\n\n{text}"
+        
         doc.close()
-        if not text.strip():
+        
+        # If no text found, try OCR
+        if not combined_text.strip():
             print("⚠️ No text found with PyMuPDF – falling back to OCR...")
             try:
                 images = convert_from_path(pdf_path, dpi=300)
                 print(f"📄 Converted {len(images)} pages to images")
-                ocr_text = ""
-                for i, img in enumerate(images):
-                    print(f"  🔍 OCR page {i+1}/{len(images)}...")
+                
+                for i, img in enumerate(images, start=1):
+                    print(f"  🔍 OCR page {i}/{len(images)}...")
                     page_text = pytesseract.image_to_string(img, lang='eng')
-                    ocr_text += f"\n--- Page {i+1} ---\n" + page_text
-                text = ocr_text
-                print(f"✅ OCR extracted {len(text)} characters")
+                    page_texts[i] = page_text
+                    combined_text += f"\n\n--- Page {i} ---\n\n{page_text}"
+                    
+                print(f"✅ OCR extracted {len(combined_text)} characters")
             except Exception as e:
                 print(f"❌ OCR failed: {e}")
-                return ""
-        return text
+                return "", {}
+        
+        return combined_text, page_texts
 
     def validate_and_store_artifact(self, correlation_id: str, extracted_dict: Dict[str, Any]) -> bool:
         try:
@@ -844,9 +906,11 @@ Return your response as a json object only. No markdown, no explanation, just js
     def process_message(self, message: Dict[str, Any]):
         correlation_id = message["correlation_id"]
         file_path = message["file_path"]
+        
         with self.tracer.start_as_current_span("parser_worker.process") as span:
             span.set_attribute("correlation_id", correlation_id)
             print(f"\n📥 Processing: {correlation_id}")
+            
             try:
                 pdf_path = Path(file_path)
                 if not pdf_path.exists():
@@ -855,7 +919,9 @@ Return your response as a json object only. No markdown, no explanation, just js
                 self.db_store.update_submission_status(correlation_id, "PARSING")
                 print(f"📊 Status: PARSING")
 
-                raw_text = self.extract_text_from_pdf(pdf_path)
+                # Extract text with page numbers
+                raw_text, page_texts = self.extract_text_from_pdf(pdf_path)
+                
                 if not raw_text or len(raw_text.strip()) == 0:
                     error_message = "No text extracted from PDF"
                     self.db_store.update_submission_status(
@@ -868,8 +934,10 @@ Return your response as a json object only. No markdown, no explanation, just js
                     span.set_status(Status(StatusCode.ERROR, error_message))
                     return
 
-                print(f"📄 Extracted {len(raw_text)} characters of text")
-                result = self.call_deepseek(raw_text, correlation_id)
+                print(f"📄 Extracted {len(raw_text)} characters of text from {len(page_texts)} pages")
+                
+                # Call DeepSeek with page information
+                result = self.call_deepseek(raw_text, page_texts, correlation_id)
 
                 status = result["status"]
                 error_message = result.get("error_message")
@@ -878,6 +946,9 @@ Return your response as a json object only. No markdown, no explanation, just js
                 if status == "SUCCESS":
                     print(f"✅ DeepSeek extraction successful")
                     deepseek_response = result["data"]
+                    
+                    # Fix page references
+                    deepseek_response = self.fix_page_references(deepseek_response, page_texts)
 
                     debug_path = self.artifact_dir / correlation_id / "deepseek_full_response.json"
                     debug_path.parent.mkdir(parents=True, exist_ok=True)
@@ -885,7 +956,7 @@ Return your response as a json object only. No markdown, no explanation, just js
                         json.dump(deepseek_response, f, indent=2)
                     print(f"💾 Full DeepSeek response saved to: {debug_path}")
 
-                    # ----- Try Azure flattening first -----
+                    # Try Azure flattening first
                     flattened_data = self._flatten_azure_response(deepseek_response)
 
                     # If critical fields are missing, fall back to flat flattening
@@ -986,4 +1057,3 @@ Return your response as a json object only. No markdown, no explanation, just js
         finally:
             self.consumer.close()
             print("✅ Consumer closed")
-

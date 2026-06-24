@@ -85,60 +85,79 @@ class Orchestrator:
         print(f"📤 Sent to Kafka: {message}")
     
     def process_submission(self, file_content: bytes, 
-                          original_filename: str = "document.pdf") -> Dict[str, Any]:
+                      original_filename: str = "document.pdf") -> Dict[str, Any]:
         """
         Orchestrate the submission intake process.
         Returns: correlation_id and initial status
         """
+        print(f"🔍 orchestrator.process_submission called: {original_filename}, size={len(file_content)}")
+        
         with self.tracer.start_as_current_span("orchestrator.process") as span:
             print("🔍 Phase 0: Starting synchronous pre-check...")
             
-            # Phase 0: Synchronous pre-check
-            is_valid, error_msg, processed_content = FilePrecheck.validate_pdf(file_content)
-            
-            if not is_valid:
-                span.set_status(Status(StatusCode.ERROR, error_msg))
-                raise ValueError(f"Pre-check failed: {error_msg}")
-            
-            print("✅ Pre-check passed")
-            
-            # Phase 1: Submission intake
-            correlation_id = self.generate_correlation_id()
-            span.set_attribute("correlation_id", correlation_id)
-            
-            print(f"📝 Phase 1: Generating correlation_id: {correlation_id}")
-            
-            # ✅ Check if file was converted (content changed)
-            is_converted = (processed_content != file_content)
-            
-            # Save PDF to local artifact (always save as PDF)
-            file_path = self.save_file_to_artifact(
-                correlation_id, 
-                processed_content,  # This is now the PDF content
-                original_filename=original_filename,
-                is_converted=is_converted
-            )
-            print(f"💾 Saved {'converted PDF' if is_converted else 'PDF'} to: {file_path}")
-            
-            # Create MongoDB record
-            print(f"📊 Saving to MongoDB - Database: {self.db_store.database_name}, Collection: raw_files")
-            record = self.db_store.create_submission_record(
-                correlation_id, 
-                str(file_path),
-                original_filename=original_filename
-            )
-            print(f"✅ MongoDB record created: {record['correlation_id']}")
-            
-            # Send to Kafka
-            self.send_to_kafka(correlation_id, file_path, original_filename=original_filename)
-            
-            span.set_status(Status(StatusCode.OK))
-            
-            return {
-                "correlation_id": correlation_id,
-                "status": record["status"],
-                "file_path": str(file_path),
-                "original_filename": original_filename,
-                "is_converted": is_converted,
-                "message": "Submission accepted and queued for parsing"
-            }
+            try:
+                is_valid, error_msg, processed_content = FilePrecheck.validate_pdf(file_content)
+                print(f"✅ Pre-check result: is_valid={is_valid}, error_msg={error_msg}")
+                
+                if not is_valid:
+                    span.set_status(Status(StatusCode.ERROR, error_msg))
+                    raise ValueError(f"Pre-check failed: {error_msg}")
+                
+                print("✅ Pre-check passed")
+                
+                # Phase 1: Submission intake
+                correlation_id = self.generate_correlation_id()
+                span.set_attribute("correlation_id", correlation_id)
+                
+                print(f"📝 Phase 1: Generating correlation_id: {correlation_id}")
+                
+                is_converted = (processed_content != file_content)
+                print(f"📝 is_converted: {is_converted}")
+                
+                file_path = self.save_file_to_artifact(
+                    correlation_id, 
+                    processed_content,
+                    original_filename=original_filename,
+                    is_converted=is_converted
+                )
+                print(f"💾 Saved file to: {file_path}")
+                
+                # Get page count
+                import fitz
+                doc = fitz.open(stream=processed_content, filetype="pdf")
+                page_count = len(doc)
+                doc.close()
+                print(f"📄 PDF has {page_count} pages")
+                
+                print(f"📊 Saving to MongoDB...")
+                record = self.db_store.create_submission_record(
+                    correlation_id, 
+                    str(file_path),
+                    original_filename=original_filename,
+                    page_count=page_count
+                )
+                print(f"✅ MongoDB record created: {record['correlation_id']}")
+                
+                # Send to Kafka
+                print(f"📤 Sending to Kafka...")
+                self.send_to_kafka(correlation_id, file_path, original_filename=original_filename)
+                
+                span.set_status(Status(StatusCode.OK))
+                
+                result = {
+                    "correlation_id": correlation_id,
+                    "status": record["status"],
+                    "file_path": str(file_path),
+                    "original_filename": original_filename,
+                    "is_converted": is_converted,
+                    "page_count": page_count,
+                    "message": "Submission accepted and queued for parsing"
+                }
+                print(f"✅ Returning result: {result}")
+                return result
+                
+            except Exception as e:
+                print(f"❌ Error in orchestrator.process_submission: {e}")
+                import traceback
+                traceback.print_exc()
+                raise

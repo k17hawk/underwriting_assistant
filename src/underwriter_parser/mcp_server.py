@@ -39,6 +39,8 @@ async def submit_document(file_content: bytes, filename: str = "document.pdf", s
     Submit a PDF document for parsing with SSE streaming support.
     Returns the correlation_id and initial status.
     """
+    print(f"🔍 submit_document called with: filename={filename}, size={len(file_content)} bytes")
+    
     try:
         # Get the current SSE session if available
         sse_session = getattr(mcp, '_current_session', None)
@@ -51,7 +53,9 @@ async def submit_document(file_content: bytes, filename: str = "document.pdf", s
                 "timestamp": datetime.now().isoformat()
             })
         
+        print("📤 Calling orchestrator.process_submission...")
         result = orchestrator.process_submission(file_content, filename)
+        print(f"✅ Orchestrator result: {result}")
         
         if stream_updates and sse_session:
             await sse_session.send_event({
@@ -62,16 +66,24 @@ async def submit_document(file_content: bytes, filename: str = "document.pdf", s
                 "timestamp": datetime.now().isoformat()
             })
         
-        return json.dumps(result, indent=2, default=str)
+        json_result = json.dumps(result, indent=2, default=str)
+        print(f"📤 Returning: {json_result[:200]}...")
+        return json_result
         
     except Exception as e:
+        print(f"❌ Error in submit_document: {e}")
+        import traceback
+        traceback.print_exc()
+        
         if stream_updates and sse_session:
             await sse_session.send_event({
                 "type": "error",
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()
             })
-        return f"Error: {str(e)}"
+        
+        error_result = {"error": str(e), "status": "FAILED"}
+        return json.dumps(error_result, default=str)
 
 @mcp.tool()
 async def get_submission_status(correlation_id: str) -> str:

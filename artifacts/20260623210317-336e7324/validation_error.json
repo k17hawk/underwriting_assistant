@@ -1,0 +1,19 @@
+{
+  "error": "7 validation errors for UnderwritingSubmission\ninsured.named_insured\n  Field required [type=missing, input_value={}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\ninsured.principal_activity\n  Field required [type=missing, input_value={}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\npolicy.submission_ref\n  Field required [type=missing, input_value={'policy_period_months': 12, 'perils': []}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\npolicy.class\n  Field required [type=missing, input_value={'policy_period_months': 12, 'perils': []}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\npolicy.inception_date\n  Field required [type=missing, input_value={'policy_period_months': 12, 'perils': []}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\npolicy.expiry_date\n  Field required [type=missing, input_value={'policy_period_months': 12, 'perils': []}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\npolicy.underwriter\n  Field required [type=missing, input_value={'policy_period_months': 12, 'perils': []}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing",
+  "data": {
+    "insured": {},
+    "policy": {
+      "policy_period_months": 12,
+      "perils": []
+    },
+    "coverage": {},
+    "locations": [],
+    "risk_features": null,
+    "loss_history": [],
+    "documents_enclosed": [],
+    "correlation_id": "20260623210317-336e7324",
+    "schema_version": "v3",
+    "timestamp_extracted": "2026-06-23T21:03:43.289189",
+    "source_file_hash": "7d5ce4bcb1d067673eed765ba7f3036ad5fa3cb4f621e60dc79ad470e0938856"
+  }
+}

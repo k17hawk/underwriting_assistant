@@ -5,9 +5,11 @@ OUTPUT FORMAT RULES
 ═══════════════════════════════════════════════════════
 1. Output ONLY raw JSON. No markdown. No backticks. No explanation. First character must be `{`, last must be `}`.
 2. Every extracted field must be wrapped as an object with exactly three keys:
-   { "value": <extracted value>, "page_ref": "p1", "confidence": <float 0.0–1.0> }
-   Confidence guide: clearly stated → 0.95–0.99 | inferred → 0.70–0.89 | guessed → 0.50–0.69 | not found → 0.0
-3. If a field is not present in the document, still include it as:
+   { "value": <extracted value>, "page_ref": "p<page_number>", "confidence": <float 0.0–1.0> }
+   ⚠️ CRITICAL: page_ref MUST reflect the actual page number from the document (e.g., "p1", "p2", "p3").
+   DO NOT use placeholder values like "p1" for everything.
+3. Confidence guide: clearly stated → 0.95–0.99 | inferred → 0.70–0.89 | guessed → 0.50–0.69 | not found → 0.0
+4. If a field is not present in the document, still include it as:
    { "value": null, "page_ref": "p1", "confidence": 0.0 }
    NEVER omit a field entirely. NEVER invent a value.
 
