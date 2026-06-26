@@ -169,7 +169,6 @@ class MongoDBSubmissionStore:
                 if isinstance(obj, dict):
                     new_dict = {}
                     for key, value in obj.items():
-                        # Replace dots with underscores
                         new_key = key.replace('.', '_').replace('$', '_')
                         new_dict[new_key] = clean_keys(value)
                     return new_dict
