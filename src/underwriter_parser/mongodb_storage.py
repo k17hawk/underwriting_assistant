@@ -163,7 +163,6 @@ class MongoDBSubmissionStore:
     def store_artifact(self, correlation_id: str, artifact_dict: dict, is_valid: bool = True):
         """Store parsed artifact in artifacts collection."""
         try:
-            # ✅ Clean the artifact dict to remove problematic field names
             def clean_keys(obj):
                 """Replace dots and dollar signs in dictionary keys."""
                 if isinstance(obj, dict):
@@ -177,10 +176,8 @@ class MongoDBSubmissionStore:
                 else:
                     return obj
             
-            # Clean the artifact data
             cleaned_artifact = clean_keys(artifact_dict)
             
-            # Also convert any datetime objects to strings
             def convert_datetime(obj):
                 
                 if isinstance(obj, datetime):
