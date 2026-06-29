@@ -41,11 +41,10 @@ class Orchestrator:
         artifact_path = self.artifact_dir / correlation_id
         artifact_path.mkdir(exist_ok=True)
         
-        # ✅ If converted from image, save as PDF
         if is_converted:
             filename = "original.pdf"
         else:
-            # Keep original filename but ensure it's safe
+
             filename = Path(original_filename).name
         
         file_path = artifact_path / filename
@@ -103,9 +102,8 @@ class Orchestrator:
                     span.set_status(Status(StatusCode.ERROR, error_msg))
                     raise ValueError(f"Pre-check failed: {error_msg}")
                 
-                print("✅ Pre-check passed")
-                
-                # Phase 1: Submission intake
+                print("Pre-check passed")
+    
                 correlation_id = self.generate_correlation_id()
                 span.set_attribute("correlation_id", correlation_id)
                 
