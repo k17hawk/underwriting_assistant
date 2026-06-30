@@ -244,11 +244,9 @@ class MongoDBSubmissionStore:
         """Get artifact by correlation_id from artifacts collection."""
         doc = self.artifacts.find_one({"correlation_id": correlation_id})
         if doc:
-            # If stored as JSON string
             if "artifact_data" in doc:
                 import json
                 return json.loads(doc["artifact_data"])
-            # If stored as dict
             elif "artifact" in doc:
                 return doc["artifact"]
         return None
