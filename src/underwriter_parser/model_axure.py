@@ -1,4 +1,3 @@
-# models_azure.py
 from datetime import datetime
 from typing import Optional, List, Any, Dict, Union
 from pydantic import BaseModel, Field, field_validator
@@ -136,15 +135,12 @@ class AzureDocumentOutput(BaseModel):
         # Ensure page_count matches actual document
         if 'document' in values:
             doc = values['document']
-            # Extract max page number from all references
             max_page = 0
-            # Check metadata
             if doc.metadata.page_ref:
                 try:
                     max_page = max(max_page, int(doc.metadata.page_ref[1:]))
                 except:
                     pass
-            # Check sections
             for section in doc.sections:
                 if section.page_ref:
                     try:
